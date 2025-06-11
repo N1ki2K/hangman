@@ -10,6 +10,7 @@ class HangmanGame:
         self.master.config(bg=COLORS["background"])
 
         self.words = self.load_words_from_file("words.txt")
+        
         self.secret_word = ""
         self.guesses = []
         self.wrong_guesses = 0
