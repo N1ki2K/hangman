@@ -3,6 +3,11 @@ import random
 from config import COLORS, FONTS
 
 class HangmanGame:
+    # КОНФИГУРАЦИЯ НА ИГРАТА
+    TOTAL_HINTS = 3
+    MAX_WRONG_GUESSES = 7
+    # =============================
+
     def __init__(self, master):
         self.master = master
         self.master.title("Бесеница")
@@ -10,73 +15,18 @@ class HangmanGame:
         self.master.config(bg=COLORS["background"])
 
         self.words = self.load_words_from_file("words.txt")
-        
         self.secret_word = ""
         self.guesses = []
         self.wrong_guesses = 0
-        self.max_wrong_guesses = 7
+        
+        self.max_wrong_guesses = self.MAX_WRONG_GUESSES
+        self.hints_left = self.TOTAL_HINTS
 
         self.content_frame = tk.Frame(master, bg=COLORS["background"])
         self.content_frame.pack(expand=True)
 
         self.setup_widgets()
         self.new_game()
-
-    def load_words_from_file(self, filename):
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                words = [line.strip().upper() for line in f if line.strip()]
-            
-            if not words:
-                print(f"Внимание: Файлът '{filename}' е празен.")
-                raise FileNotFoundError 
-            
-            print(f"Успешно заредени {len(words)} думи от '{filename}'.")
-            return words
-        except FileNotFoundError:
-            print(f"Грешка: Файлът '{filename}' не е намерен! Зарежда се резервен списък.")
-            return ["РЕЗЕРВА", "ПРИМЕР", "СПИСЪК"]
-
-    def provide_hint(self):
-        """Дава подсказка на играча, като разкрива една правилна буква."""
-        unknown_letters = [letter for letter in self.secret_word if letter not in self.guesses]
-
-        if unknown_letters:
-            hint_letter = random.choice(unknown_letters)
-            self.guesses.append(hint_letter)
-            self.message_label.config(text=f"Подсказка: Открихме буквата '{hint_letter}' за вас!", fg=COLORS["accent_blue"])
-            self.update_word_display()
-            self.update_used_letters_display()
-
-    def process_guess(self):
-        if self.guess_button['state'] == tk.DISABLED: return
-
-        guess = self.guess_entry.get().upper()
-        self.guess_entry.delete(0, tk.END)
-
-        if len(guess) != 1 or not 'А' <= guess <= 'Я':
-            self.message_label.config(text="Моля, въведете една буква от азбуката.", fg=COLORS["accent_orange"])
-            return
-        
-        if guess in self.guesses:
-            self.message_label.config(text=f"Буквата '{guess}' вече е използвана.", fg=COLORS["accent_orange"])
-            return
-        
-        self.guesses.append(guess)
-        self.update_used_letters_display()  
-        
-        if guess not in self.secret_word:
-            self.wrong_guesses += 1
-            self.draw_hangman()
-            self.message_label.config(text="") 
-
-            if self.wrong_guesses in [2, 4, 6]:
-                self.provide_hint()
-        else:
-            self.message_label.config(text="") 
-
-        self.update_word_display()
-        self.check_game_over()
 
     def setup_widgets(self):
         self.canvas = tk.Canvas(self.content_frame, width=400, height=350, bg=COLORS["canvas_bg"],
@@ -104,6 +54,13 @@ class HangmanGame:
         self.guess_button.pack(side=tk.LEFT, padx=5)
         self.guess_button.bind("<Enter>", self.on_button_enter)
         self.guess_button.bind("<Leave>", self.on_button_leave)
+        
+        self.hint_button = tk.Button(input_frame, text=f"Подсказка ({self.hints_left})", font=FONTS["button"],
+                                     bg=COLORS["accent_orange"], fg=COLORS["button_fg"],
+                                     command=self.request_hint, relief=tk.FLAT, padx=10)
+        self.hint_button.pack(side=tk.LEFT, padx=5)
+        self.hint_button.bind("<Enter>", lambda e: e.widget.config(bg="#d35400"))
+        self.hint_button.bind("<Leave>", lambda e: e.widget.config(bg=COLORS["accent_orange"]))
 
         tk.Label(self.content_frame, text="Използвани букви:", font=FONTS["body"],
                  bg=COLORS["background"], fg=COLORS["text_light"]).pack(pady=(20, 0))
@@ -120,14 +77,51 @@ class HangmanGame:
         self.new_game_button.bind("<Enter>", lambda e: e.widget.config(bg="#27ae60"))
         self.new_game_button.bind("<Leave>", lambda e: e.widget.config(bg=COLORS["accent_green"]))
 
-    def on_button_enter(self, event):
-        event.widget.config(bg=COLORS["button_hover"])
+    def request_hint(self):
+        """Извиква се при натискане на бутона за подсказка."""
+        if self.hints_left > 0:
+            self.provide_hint()
+        else:
+            self.message_label.config(text="Нямаш право на повече подсказки!", fg=COLORS["accent_orange"])
 
-    def on_button_leave(self, event):
-        event.widget.config(bg=COLORS["button_bg"])
+    def provide_hint(self):
+        """Намира и разкрива непозната буква, като намалява броя на наличните подсказки."""
+        self.hints_left -= 1
+        
+        unknown_letters = [letter for letter in self.secret_word if letter not in self.guesses]
 
-    def process_guess_event(self, event):
-        self.process_guess()
+        if unknown_letters:
+            hint_letter = random.choice(unknown_letters)
+            self.guesses.append(hint_letter)
+            self.message_label.config(text=f"Подсказка: Открихме буквата '{hint_letter}' за вас!", fg=COLORS["accent_blue"])
+            self.update_word_display()
+            self.update_used_letters_display()
+            self.check_game_over()
+
+        self.hint_button.config(text=f"Подсказка ({self.hints_left})")
+
+    def process_guess(self):
+        if self.guess_button['state'] == tk.DISABLED: return
+        guess = self.guess_entry.get().upper()
+        self.guess_entry.delete(0, tk.END)
+        if len(guess) != 1 or not 'А' <= guess <= 'Я':
+            self.message_label.config(text="Моля, въведете една буква от азбуката.", fg=COLORS["accent_orange"])
+            return
+        if guess in self.guesses:
+            self.message_label.config(text=f"Буквата '{guess}' вече е използвана.", fg=COLORS["accent_orange"])
+            return
+        
+        self.guesses.append(guess)
+        self.update_used_letters_display()
+        
+        if guess not in self.secret_word:
+            self.wrong_guesses += 1
+            self.draw_hangman()
+        
+        self.message_label.config(text="") 
+
+        self.update_word_display()
+        self.check_game_over()
 
     def new_game(self):
         self.new_game_button.pack_forget()
@@ -135,10 +129,15 @@ class HangmanGame:
         self.guess_button.config(state=tk.NORMAL)
         self.guess_entry.focus_set()
         
+        self.hints_left = self.TOTAL_HINTS
+        # Бутонът винаги е активен в началото
+        self.hint_button.config(state=tk.NORMAL, text=f"Подсказка ({self.hints_left})")
+
         if not self.words:
              self.message_label.config(text="Няма заредени думи за игра!", fg=COLORS["accent_red"])
              self.guess_entry.config(state=tk.DISABLED)
              self.guess_button.config(state=tk.DISABLED)
+             self.hint_button.config(state=tk.DISABLED)
              return
 
         self.secret_word = random.choice(self.words)
@@ -149,6 +148,28 @@ class HangmanGame:
         self.update_used_letters_display()
         self.message_label.config(text="")
         self.draw_hangman()
+
+    def load_words_from_file(self, filename):
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                words = [line.strip().upper() for line in f if line.strip()]
+            if not words:
+                print(f"Внимание: Файлът '{filename}' е празен.")
+                raise FileNotFoundError
+            print(f"Успешно заредени {len(words)} думи от '{filename}'.")
+            return words
+        except FileNotFoundError:
+            print(f"Грешка: Файлът '{filename}' не е намерен! Зарежда се резервен списък.")
+            return ["РЕЗЕРВА", "ПРИМЕР", "СПИСЪК"]
+
+    def on_button_enter(self, event):
+        event.widget.config(bg=COLORS["button_hover"])
+
+    def on_button_leave(self, event):
+        event.widget.config(bg=COLORS["button_bg"])
+
+    def process_guess_event(self, event):
+        self.process_guess()
 
     def update_word_display(self):
         displayed_word = " ".join([letter if letter in self.guesses else "_" for letter in self.secret_word])
@@ -163,7 +184,6 @@ class HangmanGame:
         if all(letter in self.guesses for letter in self.secret_word):
             self.message_label.config(text="Поздравления! Познахте думата!", fg=COLORS["accent_green"])
             game_over = True
-
         elif self.wrong_guesses >= self.max_wrong_guesses:
             self.message_label.config(text=f"Край на играта! Думата беше: {self.secret_word}", fg=COLORS["accent_red"])
             game_over = True
@@ -171,20 +191,17 @@ class HangmanGame:
         if game_over:
             self.guess_entry.config(state=tk.DISABLED)
             self.guess_button.config(state=tk.DISABLED)
+            self.hint_button.config(state=tk.DISABLED) 
             self.new_game_button.pack(pady=20)
 
     def draw_hangman(self):
         self.canvas.delete("all")
         line_color = COLORS["text_dark"]
         line_width = 4
-        
-        # Бесилка
         self.canvas.create_line(80, 320, 240, 320, width=line_width, fill=line_color)
         self.canvas.create_line(120, 320, 120, 80, width=line_width, fill=line_color)
         self.canvas.create_line(120, 80, 200, 80, width=line_width, fill=line_color)
         self.canvas.create_line(200, 80, 200, 120, width=line_width-1, fill=line_color)
-        
-        # Човече
         if self.wrong_guesses > 0: self.canvas.create_oval(180, 120, 220, 160, width=line_width-1, outline=line_color)
         if self.wrong_guesses > 1: self.canvas.create_line(200, 160, 200, 240, width=line_width-1, fill=line_color)
         if self.wrong_guesses > 2: self.canvas.create_line(200, 180, 160, 210, width=line_width-1, fill=line_color)
@@ -192,7 +209,6 @@ class HangmanGame:
         if self.wrong_guesses > 4: self.canvas.create_line(200, 240, 170, 280, width=line_width-1, fill=line_color)
         if self.wrong_guesses > 5: self.canvas.create_line(200, 240, 230, 280, width=line_width-1, fill=line_color)
         if self.wrong_guesses > 6:
-            # Лице
             self.canvas.create_line(190, 135, 195, 140, width=2, fill=COLORS["accent_red"])
             self.canvas.create_line(195, 135, 190, 140, width=2, fill=COLORS["accent_red"])
             self.canvas.create_line(205, 135, 210, 140, width=2, fill=COLORS["accent_red"])
